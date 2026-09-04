@@ -12,23 +12,40 @@ const path = require('path');
 const crypto = require('crypto');
 
 const app = express();
-const PORT = process.env.PORT || 8080;
-const DATA_FILE = path.join(__dirname, 'data.json');
 
-const SUPPORTED_CURRENCIES = [
-  'USD',
-  'JPY'
-];
+const PORT = process.env.PORT || 8080;
+
+const DATA_FILE = path.join(
+  __dirname,
+  'data.json'
+);
 
 /* =========================================================
-   REQUIRED ENVIRONMENT VARIABLES
+   CURRENCY SETTINGS
+
+   ONLY:
+   JPY = Japanese Yen ¥
+   USD = US Dollar $
 ========================================================= */
 
-for (const key of [
-  'JWT_SECRET',
-  'ADMIN_USERNAME',
-  'ADMIN_PASSWORD'
-]) {
+const SUPPORTED_CURRENCIES = [
+  'JPY',
+  'USD'
+];
+
+const DEFAULT_CURRENCY = 'JPY';
+
+/* =========================================================
+   ENVIRONMENT VARIABLES
+========================================================= */
+
+for (
+  const key of [
+    'JWT_SECRET',
+    'ADMIN_USERNAME',
+    'ADMIN_PASSWORD'
+  ]
+) {
   if (!process.env[key]) {
     console.error(
       `Missing ${key} environment variable`
@@ -64,12 +81,16 @@ if (!fs.existsSync(DATA_FILE)) {
   );
 }
 
+/* =========================================================
+   CURRENCY NORMALIZATION
+========================================================= */
+
 function normalizeCurrency(currency) {
   return SUPPORTED_CURRENCIES.includes(
     currency
   )
     ? currency
-    : 'USD';
+    : DEFAULT_CURRENCY;
 }
 
 function normalizeUser(user) {
@@ -109,6 +130,47 @@ function normalizeUser(user) {
   };
 }
 
+function normalizeLoan(loan) {
+  return {
+    ...loan,
+
+    currency:
+      normalizeCurrency(
+        loan.currency
+      )
+  };
+}
+
+function normalizeWithdrawal(
+  withdrawal
+) {
+  return {
+    ...withdrawal,
+
+    currency:
+      normalizeCurrency(
+        withdrawal.currency
+      )
+  };
+}
+
+function normalizeTransaction(
+  transaction
+) {
+  return {
+    ...transaction,
+
+    currency:
+      normalizeCurrency(
+        transaction.currency
+      )
+  };
+}
+
+/* =========================================================
+   READ DATA
+========================================================= */
+
 function readData() {
   try {
     const raw =
@@ -138,21 +200,27 @@ function readData() {
         Array.isArray(
           parsed.loans
         )
-          ? parsed.loans
+          ? parsed.loans.map(
+              normalizeLoan
+            )
           : [],
 
       withdrawals:
         Array.isArray(
           parsed.withdrawals
         )
-          ? parsed.withdrawals
+          ? parsed.withdrawals.map(
+              normalizeWithdrawal
+            )
           : [],
 
       transactions:
         Array.isArray(
           parsed.transactions
         )
-          ? parsed.transactions
+          ? parsed.transactions.map(
+              normalizeTransaction
+            )
           : [],
 
       auditLogs:
@@ -171,6 +239,10 @@ function readData() {
     return emptyData();
   }
 }
+
+/* =========================================================
+   WRITE DATA
+========================================================= */
 
 function writeData(data) {
   const temp =
@@ -260,6 +332,7 @@ app.use(
 const allowedOrigins = [
   'https://oceaniclending.name.ng',
   'https://www.oceaniclending.name.ng',
+
   'https://back-production-766a.up.railway.app',
 
   'http://localhost:3000',
@@ -313,6 +386,10 @@ app.use(
   })
 );
 
+/* =========================================================
+   BODY PARSING
+========================================================= */
+
 app.use(
   express.json({
     limit: '100kb'
@@ -322,6 +399,7 @@ app.use(
 app.use(
   express.urlencoded({
     extended: false,
+
     limit: '100kb'
   })
 );
@@ -347,7 +425,10 @@ const authLimiter =
       false,
 
     handler:
-      (_req, res) =>
+      (
+        _req,
+        res
+      ) =>
         res
           .status(429)
           .json({
@@ -373,7 +454,10 @@ const apiLimiter =
       false,
 
     handler:
-      (_req, res) =>
+      (
+        _req,
+        res
+      ) =>
         res
           .status(429)
           .json({
@@ -393,9 +477,13 @@ app.use(
 
 const currencyEnum =
   z.enum([
-    'USD',
-    'JPY'
+    'JPY',
+    'USD'
   ]);
+
+/* =========================================================
+   REGISTER
+========================================================= */
 
 const registerSchema =
   z.object({
@@ -429,9 +517,13 @@ const registerSchema =
     currency:
       currencyEnum
         .default(
-          'USD'
+          DEFAULT_CURRENCY
         )
   });
+
+/* =========================================================
+   LOGIN
+========================================================= */
 
 const loginSchema =
   z.object({
@@ -447,6 +539,10 @@ const loginSchema =
         .min(1)
         .max(128)
   });
+
+/* =========================================================
+   LOAN
+========================================================= */
 
 const loanSchema =
   z.object({
@@ -530,7 +626,7 @@ const loanSchema =
   });
 
 /* =========================================================
-   WITHDRAWAL VALIDATION
+   WITHDRAWAL
 ========================================================= */
 
 const withdrawalSchema =
@@ -584,6 +680,7 @@ const withdrawalSchema =
           .optional()
           .nullable()
     })
+
     .superRefine(
       (
         value,
@@ -611,7 +708,7 @@ const withdrawalSchema =
     );
 
 /* =========================================================
-   ADMIN USER VALIDATION
+   ADMIN USER CONTROL
 ========================================================= */
 
 const adminUserSchema =
@@ -646,6 +743,7 @@ const adminUserSchema =
         currencyEnum
           .optional()
     })
+
     .refine(
       value =>
         Object.keys(
@@ -657,6 +755,10 @@ const adminUserSchema =
           'At least one field is required'
       }
     );
+
+/* =========================================================
+   VERIFICATION
+========================================================= */
 
 const verificationSchema =
   z.object({
@@ -675,6 +777,10 @@ const verificationSchema =
         .optional()
         .nullable()
   });
+
+/* =========================================================
+   ADMIN FUND CONTROL
+========================================================= */
 
 const fundAdjustmentSchema =
   z.object({
@@ -711,6 +817,10 @@ const fundAdjustmentSchema =
         .optional()
   });
 
+/* =========================================================
+   ADMIN LOAN CONTROL
+========================================================= */
+
 const loanAdminSchema =
   z.object({
     status:
@@ -729,6 +839,10 @@ const loanAdminSchema =
         .optional()
         .nullable()
   });
+
+/* =========================================================
+   ADMIN WITHDRAWAL CONTROL
+========================================================= */
 
 const withdrawalAdminSchema =
   z.object({
@@ -750,6 +864,10 @@ const withdrawalAdminSchema =
         .nullable()
   });
 
+/* =========================================================
+   PARSE BODY
+========================================================= */
+
 function parseBody(
   schema,
   body,
@@ -770,7 +888,8 @@ function parseBody(
           'Validation failed',
 
         details:
-          result.error.flatten()
+          result.error
+            .flatten()
       });
 
     return null;
@@ -780,7 +899,7 @@ function parseBody(
 }
 
 /* =========================================================
-   HELPERS
+   GENERATE ID
 ========================================================= */
 
 function generateId() {
@@ -789,9 +908,16 @@ function generateId() {
       .toString(36) +
     Math.random()
       .toString(36)
-      .slice(2, 8)
+      .slice(
+        2,
+        8
+      )
   );
 }
+
+/* =========================================================
+   LOAN ESTIMATE
+========================================================= */
 
 function estimateLoan(
   amount,
@@ -820,6 +946,10 @@ function estimateLoan(
       )
   };
 }
+
+/* =========================================================
+   SAFE USER
+========================================================= */
 
 function safeUser(user) {
   return {
@@ -867,6 +997,10 @@ function safeUser(user) {
   };
 }
 
+/* =========================================================
+   ADMIN USER VIEW
+========================================================= */
+
 function adminUserView(user) {
   return {
     ...safeUser(
@@ -878,6 +1012,10 @@ function adminUserView(user) {
       null
   };
 }
+
+/* =========================================================
+   SECURE EQUALITY
+========================================================= */
 
 function secureEqual(
   a,
@@ -907,6 +1045,10 @@ function secureEqual(
     );
 }
 
+/* =========================================================
+   AUDIT LOG
+========================================================= */
+
 function addAudit(
   data,
   action,
@@ -932,6 +1074,10 @@ function addAudit(
     );
 }
 
+/* =========================================================
+   TRANSACTION HELPER
+========================================================= */
+
 function makeTransaction(
   data,
   {
@@ -953,7 +1099,9 @@ function makeTransaction(
     type,
 
     amount:
-      Number(amount),
+      Number(
+        amount
+      ),
 
     currency:
       normalizeCurrency(
@@ -1018,7 +1166,8 @@ function auth(
         header.substring(
           7
         ),
-        process.env.JWT_SECRET
+        process.env
+          .JWT_SECRET
       );
 
     const data =
@@ -1056,7 +1205,9 @@ function auth(
       user;
 
     next();
-  } catch (_error) {
+  } catch (
+    _error
+  ) {
     return res
       .status(401)
       .json({
@@ -1067,7 +1218,7 @@ function auth(
 }
 
 /* =========================================================
-   ADMIN AUTH
+   ADMIN AUTH MIDDLEWARE
 ========================================================= */
 
 function adminAuth(
@@ -1099,7 +1250,8 @@ function adminAuth(
         header.substring(
           7
         ),
-        process.env.JWT_SECRET
+        process.env
+          .JWT_SECRET
       );
 
     if (
@@ -1120,7 +1272,9 @@ function adminAuth(
       decoded;
 
     next();
-  } catch (_error) {
+  } catch (
+    _error
+  ) {
     return res
       .status(401)
       .json({
@@ -1136,19 +1290,28 @@ function adminAuth(
 
 app.get(
   '/api/health',
+
   (
     _req,
     res
   ) => {
     res.json({
-      ok: true,
+      ok:
+        true,
 
       service:
         'oceanic-lending-api',
 
       environment:
-        process.env.NODE_ENV ||
+        process.env
+          .NODE_ENV ||
         'development',
+
+      currencies:
+        SUPPORTED_CURRENCIES,
+
+      defaultCurrency:
+        DEFAULT_CURRENCY,
 
       timestamp:
         new Date()
@@ -1163,7 +1326,9 @@ app.get(
 
 app.post(
   '/api/admin/login',
+
   authLimiter,
+
   (
     req,
     res
@@ -1200,11 +1365,14 @@ app.post(
     if (
       !secureEqual(
         username,
+
         process.env
           .ADMIN_USERNAME
       ) ||
+
       !secureEqual(
         password,
+
         process.env
           .ADMIN_PASSWORD
       )
@@ -1236,9 +1404,11 @@ app.post(
         }
       );
 
-    res.json({
+    return res.json({
       token,
-      role: 'admin'
+
+      role:
+        'admin'
     });
   }
 );
@@ -1249,7 +1419,9 @@ app.post(
 
 app.get(
   '/api/admin/dashboard',
+
   adminAuth,
+
   (
     _req,
     res
@@ -1257,7 +1429,7 @@ app.get(
     const data =
       readData();
 
-    res.json({
+    return res.json({
       users:
         data.users.map(
           adminUserView
@@ -1318,12 +1490,14 @@ app.get(
 );
 
 /* =========================================================
-   ADMIN USER CONTROL
+   ADMIN UPDATE USER
 ========================================================= */
 
 app.patch(
   '/api/admin/users/:id',
+
   adminAuth,
+
   (
     req,
     res
@@ -1358,14 +1532,21 @@ app.patch(
         });
     }
 
+    /*
+       Do not change currency
+       while money is inside wallet.
+    */
     if (
       form.currency &&
+
       form.currency !==
         user.currency &&
+
       Number(
         user.balance ||
         0
-      ) !== 0
+      ) !==
+        0
     ) {
       return res
         .status(409)
@@ -1427,7 +1608,9 @@ app.patch(
 
     addAudit(
       data,
+
       'user_updated',
+
       {
         userId:
           user.id,
@@ -1454,7 +1637,7 @@ app.patch(
       data
     );
 
-    res.json({
+    return res.json({
       user:
         safeUser(
           user
@@ -1469,7 +1652,9 @@ app.patch(
 
 app.patch(
   '/api/admin/users/:id/verification',
+
   adminAuth,
+
   (
     req,
     res
@@ -1528,7 +1713,9 @@ app.patch(
 
     addAudit(
       data,
+
       'verification_updated',
+
       {
         userId:
           user.id,
@@ -1548,7 +1735,7 @@ app.patch(
       data
     );
 
-    res.json({
+    return res.json({
       user:
         safeUser(
           user
@@ -1563,7 +1750,9 @@ app.patch(
 
 app.post(
   '/api/admin/users/:id/funds',
+
   adminAuth,
+
   (
     req,
     res
@@ -1629,6 +1818,7 @@ app.post(
     if (
       form.action ===
         'debit' &&
+
       amount >
         current
     ) {
@@ -1645,6 +1835,7 @@ app.post(
       'credit'
         ? current +
           amount
+
         : current -
           amount;
 
@@ -1655,6 +1846,7 @@ app.post(
     const transaction =
       makeTransaction(
         data,
+
         {
           userId:
             user.id,
@@ -1684,7 +1876,9 @@ app.post(
 
     addAudit(
       data,
+
       'fund_adjustment',
+
       {
         userId:
           user.id,
@@ -1709,7 +1903,7 @@ app.post(
       data
     );
 
-    res.json({
+    return res.json({
       user:
         safeUser(
           user
@@ -1726,7 +1920,9 @@ app.post(
 
 app.patch(
   '/api/admin/loans/:id',
+
   adminAuth,
+
   (
     req,
     res
@@ -1780,12 +1976,12 @@ app.patch(
         .toISOString();
 
     /*
-     * Only disburse
-     * once.
-     */
+       Only disburse once.
+    */
     if (
       form.status ===
         'approved' &&
+
       !loan.disbursedAt
     ) {
       const user =
@@ -1837,6 +2033,7 @@ app.patch(
       const transaction =
         makeTransaction(
           data,
+
           {
             userId:
               user.id,
@@ -1873,7 +2070,9 @@ app.patch(
 
     addAudit(
       data,
+
       'loan_status_updated',
+
       {
         loanId:
           loan.id,
@@ -1895,7 +2094,7 @@ app.patch(
       data
     );
 
-    res.json({
+    return res.json({
       loan
     });
   }
@@ -1907,7 +2106,9 @@ app.patch(
 
 app.patch(
   '/api/admin/withdrawals/:id',
+
   adminAuth,
+
   (
     req,
     res
@@ -1933,7 +2134,9 @@ app.patch(
           req.params.id
       );
 
-    if (!withdrawal) {
+    if (
+      !withdrawal
+    ) {
       return res
         .status(404)
         .json({
@@ -1961,21 +2164,25 @@ app.patch(
         .toISOString();
 
     /*
-     * Update the transaction
-     * connected to the request.
-     */
+       Update original
+       transaction.
+    */
     const transaction =
       data.transactions.find(
         item =>
           item.type ===
             'withdrawal' &&
+
           item.reference ===
             withdrawal.reference &&
+
           item.userId ===
             withdrawal.userId
       );
 
-    if (transaction) {
+    if (
+      transaction
+    ) {
       transaction.status =
         form.status;
     }
@@ -1983,23 +2190,25 @@ app.patch(
     const isRefundStatus =
       form.status ===
         'rejected' ||
+
       form.status ===
         'cancelled';
 
     const wasRefundStatus =
       previousStatus ===
         'rejected' ||
+
       previousStatus ===
         'cancelled';
 
     /*
-     * Refund a rejected
-     * or cancelled request
-     * once.
-     */
+       Refund once.
+    */
     if (
       isRefundStatus &&
+
       !wasRefundStatus &&
+
       !withdrawal.refundedAt
     ) {
       const user =
@@ -2009,7 +2218,9 @@ app.patch(
             withdrawal.userId
         );
 
-      if (user) {
+      if (
+        user
+      ) {
         user.balance =
           Number(
             user.balance ||
@@ -2025,6 +2236,7 @@ app.patch(
 
         makeTransaction(
           data,
+
           {
             userId:
               user.id,
@@ -2061,13 +2273,14 @@ app.patch(
     }
 
     /*
-     * If admin reopens a
-     * refunded withdrawal,
-     * reserve funds again.
-     */
+       If reopened,
+       reserve money again.
+    */
     if (
       !isRefundStatus &&
+
       wasRefundStatus &&
+
       withdrawal.refundedAt
     ) {
       const user =
@@ -2077,7 +2290,9 @@ app.patch(
             withdrawal.userId
         );
 
-      if (!user) {
+      if (
+        !user
+      ) {
         return res
           .status(404)
           .json({
@@ -2119,6 +2334,7 @@ app.patch(
 
       makeTransaction(
         data,
+
         {
           userId:
             user.id,
@@ -2151,7 +2367,9 @@ app.patch(
 
     addAudit(
       data,
+
       'withdrawal_status_updated',
+
       {
         withdrawalId:
           withdrawal.id,
@@ -2173,7 +2391,7 @@ app.patch(
       data
     );
 
-    res.json({
+    return res.json({
       withdrawal
     });
   }
@@ -2185,7 +2403,9 @@ app.patch(
 
 app.post(
   '/api/auth/register',
+
   authLimiter,
+
   async (
     req,
     res,
@@ -2216,11 +2436,14 @@ app.post(
           item =>
             String(
               item.email
-            ).toLowerCase() ===
+            )
+              .toLowerCase() ===
             email
         );
 
-      if (exists) {
+      if (
+        exists
+      ) {
         return res
           .status(409)
           .json({
@@ -2257,7 +2480,9 @@ app.post(
           0,
 
         currency:
-          form.currency,
+          normalizeCurrency(
+            form.currency
+          ),
 
         status:
           'active',
@@ -2305,7 +2530,7 @@ app.post(
           }
         );
 
-      res
+      return res
         .status(201)
         .json({
           user:
@@ -2315,7 +2540,9 @@ app.post(
 
           token
         });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       next(
         error
       );
@@ -2329,7 +2556,9 @@ app.post(
 
 app.post(
   '/api/auth/login',
+
   authLimiter,
+
   async (
     req,
     res,
@@ -2360,12 +2589,14 @@ app.post(
           item =>
             String(
               item.email
-            ).toLowerCase() ===
+            )
+              .toLowerCase() ===
             email
         );
 
       if (
         !user ||
+
         !(
           await bcrypt.compare(
             form.password,
@@ -2412,7 +2643,7 @@ app.post(
           }
         );
 
-      res.json({
+      return res.json({
         user:
           safeUser(
             user
@@ -2420,7 +2651,9 @@ app.post(
 
         token
       });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       next(
         error
       );
@@ -2434,12 +2667,14 @@ app.post(
 
 app.get(
   '/api/me',
+
   auth,
+
   (
     req,
     res
   ) => {
-    res.json({
+    return res.json({
       user:
         safeUser(
           req.user
@@ -2454,7 +2689,9 @@ app.get(
 
 app.get(
   '/api/wallet',
+
   auth,
+
   (
     req,
     res
@@ -2469,7 +2706,9 @@ app.get(
           req.user.id
       );
 
-    if (!user) {
+    if (
+      !user
+    ) {
       return res
         .status(404)
         .json({
@@ -2498,7 +2737,7 @@ app.get(
             )
         );
 
-    res.json({
+    return res.json({
       wallet: {
         balance:
           Number(
@@ -2527,7 +2766,9 @@ app.get(
 
 app.get(
   '/api/loans',
+
   auth,
+
   (
     req,
     res
@@ -2555,7 +2796,7 @@ app.get(
             )
         );
 
-    res.json({
+    return res.json({
       loans
     });
   }
@@ -2567,7 +2808,9 @@ app.get(
 
 app.post(
   '/api/loans',
+
   auth,
+
   (
     req,
     res,
@@ -2595,7 +2838,9 @@ app.post(
             req.user.id
         );
 
-      if (!user) {
+      if (
+        !user
+      ) {
         return res
           .status(404)
           .json({
@@ -2666,7 +2911,7 @@ app.post(
           form.loanAmount,
 
         currency:
-          form.currency,
+          walletCurrency,
 
         loanPeriodYears:
           form.loanPeriodYears,
@@ -2704,12 +2949,14 @@ app.post(
         data
       );
 
-      res
+      return res
         .status(201)
         .json({
           loan
         });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       next(
         error
       );
@@ -2723,7 +2970,9 @@ app.post(
 
 app.get(
   '/api/withdrawals',
+
   auth,
+
   (
     req,
     res
@@ -2751,7 +3000,7 @@ app.get(
             )
         );
 
-    res.json({
+    return res.json({
       withdrawals
     });
   }
@@ -2763,7 +3012,9 @@ app.get(
 
 app.post(
   '/api/withdrawals',
+
   auth,
+
   (
     req,
     res,
@@ -2791,7 +3042,9 @@ app.post(
             req.user.id
         );
 
-      if (!user) {
+      if (
+        !user
+      ) {
         return res
           .status(404)
           .json({
@@ -2824,9 +3077,8 @@ app.post(
       }
 
       /*
-       * Reserve the money
-       * immediately.
-       */
+         Reserve money immediately.
+      */
       user.balance =
         balance -
         amount;
@@ -2845,7 +3097,9 @@ app.post(
       const reasonLabel =
         form.reason ===
         'other'
+
           ? form.otherReason
+
           : form.reason
               .replaceAll(
                 '_',
@@ -2909,6 +3163,7 @@ app.post(
 
       makeTransaction(
         data,
+
         {
           userId:
             req.user.id,
@@ -2937,7 +3192,7 @@ app.post(
         data
       );
 
-      res
+      return res
         .status(201)
         .json({
           reference,
@@ -2947,7 +3202,9 @@ app.post(
 
           withdrawal
         });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       next(
         error
       );
@@ -2961,6 +3218,7 @@ app.post(
 
 app.use(
   '/api',
+
   (
     req,
     res
@@ -2980,7 +3238,7 @@ app.use(
 );
 
 /* =========================================================
-   SERVE FRONTEND
+   STATIC FRONTEND
 ========================================================= */
 
 app.use(
@@ -2991,6 +3249,7 @@ app.use(
 
 app.get(
   '/',
+
   (
     _req,
     res
@@ -3005,6 +3264,7 @@ app.get(
 
 app.get(
   '/admin',
+
   (
     _req,
     res
@@ -3039,7 +3299,7 @@ app.use(
         });
     }
 
-    res
+    return res
       .status(404)
       .send(
         'Page not found'
@@ -3074,8 +3334,10 @@ app.use(
     if (
       err instanceof
         SyntaxError &&
+
       err.status ===
         400 &&
+
       'body' in err
     ) {
       return res
@@ -3098,9 +3360,12 @@ app.use(
         )
         .json({
           error:
-            process.env.NODE_ENV ===
+            process.env
+              .NODE_ENV ===
             'production'
+
               ? 'Internal server error'
+
               : (
                   err.message ||
                   'Internal server error'
@@ -3108,7 +3373,7 @@ app.use(
         });
     }
 
-    res
+    return res
       .status(
         err.status ||
         500
@@ -3125,10 +3390,27 @@ app.use(
 
 app.listen(
   PORT,
+
   '0.0.0.0',
+
   () => {
+    console.log('');
     console.log(
-      `Oceanic Lending API started on port ${PORT}`
+      'Oceanic Lending API started'
     );
+
+    console.log(
+      `Port: ${PORT}`
+    );
+
+    console.log(
+      'Currencies: JPY ¥ and USD $'
+    );
+
+    console.log(
+      'Default wallet: JPY ¥'
+    );
+
+    console.log('');
   }
 );
