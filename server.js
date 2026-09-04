@@ -15,12 +15,25 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 const DATA_FILE = path.join(__dirname, 'data.json');
 
+const SUPPORTED_CURRENCIES = [
+  'USD',
+  'JPY'
+];
+
 /* =========================================================
    REQUIRED ENVIRONMENT VARIABLES
 ========================================================= */
-for (const key of ['JWT_SECRET', 'ADMIN_USERNAME', 'ADMIN_PASSWORD']) {
+
+for (const key of [
+  'JWT_SECRET',
+  'ADMIN_USERNAME',
+  'ADMIN_PASSWORD'
+]) {
   if (!process.env[key]) {
-    console.error(`❌ Missing ${key} environment variable`);
+    console.error(
+      `Missing ${key} environment variable`
+    );
+
     process.exit(1);
   }
 }
@@ -28,6 +41,7 @@ for (const key of ['JWT_SECRET', 'ADMIN_USERNAME', 'ADMIN_PASSWORD']) {
 /* =========================================================
    DATA STORAGE
 ========================================================= */
+
 function emptyData() {
   return {
     users: [],
@@ -41,23 +55,53 @@ function emptyData() {
 if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(
     DATA_FILE,
-    JSON.stringify(emptyData(), null, 2),
+    JSON.stringify(
+      emptyData(),
+      null,
+      2
+    ),
     'utf8'
   );
+}
+
+function normalizeCurrency(currency) {
+  return SUPPORTED_CURRENCIES.includes(
+    currency
+  )
+    ? currency
+    : 'USD';
 }
 
 function normalizeUser(user) {
   return {
     ...user,
-    balance: Number(user.balance || 0),
-    currency: user.currency || 'NGN',
-    status: user.status || 'active',
+
+    balance:
+      Number(
+        user.balance || 0
+      ),
+
+    currency:
+      normalizeCurrency(
+        user.currency
+      ),
+
+    status:
+      user.status ||
+      'active',
+
     verificationStatus:
-      user.verificationStatus || 'pending',
+      user.verificationStatus ||
+      'pending',
+
     verificationNote:
-      user.verificationNote || null,
+      user.verificationNote ||
+      null,
+
     verifiedAt:
-      user.verifiedAt || null,
+      user.verifiedAt ||
+      null,
+
     updatedAt:
       user.updatedAt ||
       user.createdAt ||
@@ -67,43 +111,60 @@ function normalizeUser(user) {
 
 function readData() {
   try {
-    const raw = fs.readFileSync(DATA_FILE, 'utf8');
+    const raw =
+      fs.readFileSync(
+        DATA_FILE,
+        'utf8'
+      );
 
     if (!raw.trim()) {
       return emptyData();
     }
 
-    const parsed = JSON.parse(raw);
+    const parsed =
+      JSON.parse(raw);
 
     return {
       users:
-        Array.isArray(parsed.users)
-          ? parsed.users.map(normalizeUser)
+        Array.isArray(
+          parsed.users
+        )
+          ? parsed.users.map(
+              normalizeUser
+            )
           : [],
 
       loans:
-        Array.isArray(parsed.loans)
+        Array.isArray(
+          parsed.loans
+        )
           ? parsed.loans
           : [],
 
       withdrawals:
-        Array.isArray(parsed.withdrawals)
+        Array.isArray(
+          parsed.withdrawals
+        )
           ? parsed.withdrawals
           : [],
 
       transactions:
-        Array.isArray(parsed.transactions)
+        Array.isArray(
+          parsed.transactions
+        )
           ? parsed.transactions
           : [],
 
       auditLogs:
-        Array.isArray(parsed.auditLogs)
+        Array.isArray(
+          parsed.auditLogs
+        )
           ? parsed.auditLogs
           : []
     };
   } catch (error) {
     console.error(
-      '❌ Failed to read data.json:',
+      'Failed to read data.json:',
       error.message
     );
 
@@ -112,22 +173,37 @@ function readData() {
 }
 
 function writeData(data) {
-  const temp = `${DATA_FILE}.tmp`;
+  const temp =
+    `${DATA_FILE}.tmp`;
 
   fs.writeFileSync(
     temp,
-    JSON.stringify(data, null, 2),
+    JSON.stringify(
+      data,
+      null,
+      2
+    ),
     'utf8'
   );
 
-  fs.renameSync(temp, DATA_FILE);
+  fs.renameSync(
+    temp,
+    DATA_FILE
+  );
 }
 
 /* =========================================================
-   APP / SECURITY / CORS
+   SECURITY
 ========================================================= */
-app.set('trust proxy', 1);
-app.disable('x-powered-by');
+
+app.set(
+  'trust proxy',
+  1
+);
+
+app.disable(
+  'x-powered-by'
+);
 
 app.use(
   helmet({
@@ -172,9 +248,14 @@ app.use(
       }
     },
 
-    crossOriginEmbedderPolicy: false
+    crossOriginEmbedderPolicy:
+      false
   })
 );
+
+/* =========================================================
+   CORS
+========================================================= */
 
 const allowedOrigins = [
   'https://oceaniclending.name.ng',
@@ -190,18 +271,21 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin(origin, callback) {
+    origin(
+      origin,
+      callback
+    ) {
       if (
         !origin ||
-        allowedOrigins.includes(origin)
+        allowedOrigins.includes(
+          origin
+        )
       ) {
-        return callback(null, true);
+        return callback(
+          null,
+          true
+        );
       }
-
-      console.warn(
-        '❌ Blocked CORS origin:',
-        origin
-      );
 
       return callback(
         new Error(
@@ -210,7 +294,8 @@ app.use(
       );
     },
 
-    credentials: true,
+    credentials:
+      true,
 
     methods: [
       'GET',
@@ -244,37 +329,58 @@ app.use(
 /* =========================================================
    RATE LIMITS
 ========================================================= */
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
 
-  limit: 20,
+const authLimiter =
+  rateLimit({
+    windowMs:
+      15 *
+      60 *
+      1000,
 
-  standardHeaders: true,
+    limit:
+      20,
 
-  legacyHeaders: false,
+    standardHeaders:
+      true,
 
-  handler: (_req, res) =>
-    res.status(429).json({
-      error:
-        'Too many login attempts. Please try again later.'
-    })
-});
+    legacyHeaders:
+      false,
 
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+    handler:
+      (_req, res) =>
+        res
+          .status(429)
+          .json({
+            error:
+              'Too many login attempts. Please try again later.'
+          })
+  });
 
-  limit: 500,
+const apiLimiter =
+  rateLimit({
+    windowMs:
+      15 *
+      60 *
+      1000,
 
-  standardHeaders: true,
+    limit:
+      500,
 
-  legacyHeaders: false,
+    standardHeaders:
+      true,
 
-  handler: (_req, res) =>
-    res.status(429).json({
-      error:
-        'Too many requests. Please try again later.'
-    })
-});
+    legacyHeaders:
+      false,
+
+    handler:
+      (_req, res) =>
+        res
+          .status(429)
+          .json({
+            error:
+              'Too many requests. Please try again later.'
+          })
+  });
 
 app.use(
   '/api',
@@ -285,277 +391,364 @@ app.use(
    VALIDATION
 ========================================================= */
 
-const currencyEnum = z.enum([
-  'NGN',
-  'USD',
-  'GBP',
-  'EUR',
-  'GHS',
-  'KES',
-  'ZAR'
-]);
+const currencyEnum =
+  z.enum([
+    'USD',
+    'JPY'
+  ]);
 
-const registerSchema = z.object({
-  fullName:
-    z
-      .string()
-      .trim()
-      .min(2)
-      .max(120),
-
-  email:
-    z
-      .string()
-      .trim()
-      .email()
-      .max(320),
-
-  phone:
-    z
-      .string()
-      .trim()
-      .min(7)
-      .max(40),
-
-  password:
-    z
-      .string()
-      .min(8)
-      .max(128)
-});
-
-const loginSchema = z.object({
-  email:
-    z
-      .string()
-      .trim()
-      .email(),
-
-  password:
-    z
-      .string()
-      .min(1)
-      .max(128)
-});
-
-const loanSchema = z.object({
-  applicantName:
-    z
-      .string()
-      .trim()
-      .min(2)
-      .max(120),
-
-  country:
-    z
-      .string()
-      .trim()
-      .min(2)
-      .max(100),
-
-  addressTitle:
-    z
-      .string()
-      .trim()
-      .min(3)
-      .max(500),
-
-  city:
-    z
-      .string()
-      .trim()
-      .min(2)
-      .max(100),
-
-  stateRegion:
-    z
-      .string()
-      .trim()
-      .min(2)
-      .max(100),
-
-  phone:
-    z
-      .string()
-      .trim()
-      .min(7)
-      .max(40),
-
-  email:
-    z
-      .string()
-      .trim()
-      .email(),
-
-  monthlyIncome:
-    z
-      .coerce
-      .number()
-      .positive(),
-
-  loanAmount:
-    z
-      .coerce
-      .number()
-      .positive(),
-
-  currency:
-    currencyEnum,
-
-  loanPeriodYears:
-    z
-      .coerce
-      .number()
-      .int()
-      .min(1)
-      .max(10),
-
-  purpose:
-    z
-      .string()
-      .trim()
-      .min(3)
-      .max(1000)
-});
-
-const withdrawalSchema = z.object({
-  amount:
-    z
-      .coerce
-      .number()
-      .positive(),
-
-  destination:
-    z
-      .string()
-      .trim()
-      .min(5)
-      .max(1000)
-});
-
-const adminUserSchema = z
-  .object({
+const registerSchema =
+  z.object({
     fullName:
       z
         .string()
         .trim()
         .min(2)
-        .max(120)
-        .optional(),
+        .max(120),
+
+    email:
+      z
+        .string()
+        .trim()
+        .email()
+        .max(320),
 
     phone:
       z
         .string()
         .trim()
         .min(7)
-        .max(40)
-        .optional(),
+        .max(40),
 
-    status:
+    password:
       z
-        .enum([
-          'active',
-          'inactive',
-          'suspended'
-        ])
+        .string()
+        .min(8)
+        .max(128),
+
+    currency:
+      currencyEnum
+        .default(
+          'USD'
+        )
+  });
+
+const loginSchema =
+  z.object({
+    email:
+      z
+        .string()
+        .trim()
+        .email(),
+
+    password:
+      z
+        .string()
+        .min(1)
+        .max(128)
+  });
+
+const loanSchema =
+  z.object({
+    applicantName:
+      z
+        .string()
+        .trim()
+        .min(2)
+        .max(120),
+
+    country:
+      z
+        .string()
+        .trim()
+        .min(2)
+        .max(100),
+
+    addressTitle:
+      z
+        .string()
+        .trim()
+        .min(3)
+        .max(500),
+
+    city:
+      z
+        .string()
+        .trim()
+        .min(2)
+        .max(100),
+
+    stateRegion:
+      z
+        .string()
+        .trim()
+        .min(2)
+        .max(100),
+
+    phone:
+      z
+        .string()
+        .trim()
+        .min(7)
+        .max(40),
+
+    email:
+      z
+        .string()
+        .trim()
+        .email(),
+
+    monthlyIncome:
+      z
+        .coerce
+        .number()
+        .positive(),
+
+    loanAmount:
+      z
+        .coerce
+        .number()
+        .positive(),
+
+    currency:
+      currencyEnum,
+
+    loanPeriodYears:
+      z
+        .coerce
+        .number()
+        .int()
+        .min(1)
+        .max(10),
+
+    purpose:
+      z
+        .string()
+        .trim()
+        .min(3)
+        .max(1000)
+  });
+
+/* =========================================================
+   WITHDRAWAL VALIDATION
+========================================================= */
+
+const withdrawalSchema =
+  z
+    .object({
+      amount:
+        z
+          .coerce
+          .number()
+          .positive(),
+
+      accountName:
+        z
+          .string()
+          .trim()
+          .min(2)
+          .max(120),
+
+      bankName:
+        z
+          .string()
+          .trim()
+          .min(2)
+          .max(120),
+
+      accountNumber:
+        z
+          .string()
+          .trim()
+          .min(4)
+          .max(34),
+
+      reason:
+        z.enum([
+          'personal_expenses',
+          'business_expenses',
+          'education',
+          'medical',
+          'family_support',
+          'bills',
+          'investment',
+          'transfer_to_own_account',
+          'other'
+        ]),
+
+      otherReason:
+        z
+          .string()
+          .trim()
+          .max(300)
+          .optional()
+          .nullable()
+    })
+    .superRefine(
+      (
+        value,
+        ctx
+      ) => {
+        if (
+          value.reason ===
+            'other' &&
+          !value.otherReason
+        ) {
+          ctx.addIssue({
+            code:
+              z.ZodIssueCode
+                .custom,
+
+            path: [
+              'otherReason'
+            ],
+
+            message:
+              'Please provide the withdrawal reason.'
+          });
+        }
+      }
+    );
+
+/* =========================================================
+   ADMIN USER VALIDATION
+========================================================= */
+
+const adminUserSchema =
+  z
+    .object({
+      fullName:
+        z
+          .string()
+          .trim()
+          .min(2)
+          .max(120)
+          .optional(),
+
+      phone:
+        z
+          .string()
+          .trim()
+          .min(7)
+          .max(40)
+          .optional(),
+
+      status:
+        z
+          .enum([
+            'active',
+            'inactive',
+            'suspended'
+          ])
+          .optional(),
+
+      currency:
+        currencyEnum
+          .optional()
+    })
+    .refine(
+      value =>
+        Object.keys(
+          value
+        ).length >
+        0,
+      {
+        message:
+          'At least one field is required'
+      }
+    );
+
+const verificationSchema =
+  z.object({
+    status:
+      z.enum([
+        'pending',
+        'verified',
+        'rejected'
+      ]),
+
+    note:
+      z
+        .string()
+        .trim()
+        .max(500)
         .optional()
-  })
-  .refine(
-    value =>
-      Object.keys(value).length > 0,
-    {
-      message:
-        'At least one field is required'
-    }
-  );
+        .nullable()
+  });
 
-const verificationSchema = z.object({
-  status:
-    z.enum([
-      'pending',
-      'verified',
-      'rejected'
-    ]),
+const fundAdjustmentSchema =
+  z.object({
+    action:
+      z.enum([
+        'credit',
+        'debit'
+      ]),
 
-  note:
-    z
-      .string()
-      .trim()
-      .max(500)
-      .optional()
-      .nullable()
-});
+    amount:
+      z
+        .coerce
+        .number()
+        .positive()
+        .max(
+          1_000_000_000_000
+        ),
 
-const fundAdjustmentSchema = z.object({
-  action:
-    z.enum([
-      'credit',
-      'debit'
-    ]),
+    currency:
+      currencyEnum,
 
-  amount:
-    z
-      .coerce
-      .number()
-      .positive()
-      .max(
-        1_000_000_000_000
-      ),
+    description:
+      z
+        .string()
+        .trim()
+        .min(3)
+        .max(300),
 
-  currency:
-    currencyEnum,
+    reference:
+      z
+        .string()
+        .trim()
+        .max(120)
+        .optional()
+  });
 
-  description:
-    z
-      .string()
-      .trim()
-      .min(3)
-      .max(300),
+const loanAdminSchema =
+  z.object({
+    status:
+      z.enum([
+        'under_review',
+        'approved',
+        'rejected',
+        'cancelled'
+      ]),
 
-  reference:
-    z
-      .string()
-      .trim()
-      .max(120)
-      .optional()
-});
+    reviewerNote:
+      z
+        .string()
+        .trim()
+        .max(1000)
+        .optional()
+        .nullable()
+  });
 
-const loanAdminSchema = z.object({
-  status:
-    z.enum([
-      'under_review',
-      'approved',
-      'rejected',
-      'cancelled'
-    ]),
+const withdrawalAdminSchema =
+  z.object({
+    status:
+      z.enum([
+        'pending',
+        'processing',
+        'completed',
+        'rejected',
+        'cancelled'
+      ]),
 
-  reviewerNote:
-    z
-      .string()
-      .trim()
-      .max(1000)
-      .optional()
-      .nullable()
-});
-
-const withdrawalAdminSchema = z.object({
-  status:
-    z.enum([
-      'pending',
-      'processing',
-      'completed',
-      'rejected',
-      'cancelled'
-    ]),
-
-  reviewerNote:
-    z
-      .string()
-      .trim()
-      .max(1000)
-      .optional()
-      .nullable()
-});
+    reviewerNote:
+      z
+        .string()
+        .trim()
+        .max(1000)
+        .optional()
+        .nullable()
+  });
 
 function parseBody(
   schema,
@@ -563,16 +756,22 @@ function parseBody(
   res
 ) {
   const result =
-    schema.safeParse(body);
+    schema.safeParse(
+      body
+    );
 
-  if (!result.success) {
-    res.status(400).json({
-      error:
-        'Validation failed',
+  if (
+    !result.success
+  ) {
+    res
+      .status(400)
+      .json({
+        error:
+          'Validation failed',
 
-      details:
-        result.error.flatten()
-    });
+        details:
+          result.error.flatten()
+      });
 
     return null;
   }
@@ -586,7 +785,8 @@ function parseBody(
 
 function generateId() {
   return (
-    Date.now().toString(36) +
+    Date.now()
+      .toString(36) +
     Math.random()
       .toString(36)
       .slice(2, 8)
@@ -599,17 +799,25 @@ function estimateLoan(
   rate = 0.12
 ) {
   const interest =
-    amount * rate * years;
+    amount *
+    rate *
+    years;
 
   const total =
-    amount + interest;
+    amount +
+    interest;
 
   return {
     interest,
+
     total,
+
     monthly:
       total /
-      (years * 12)
+      (
+        years *
+        12
+      )
   };
 }
 
@@ -629,21 +837,26 @@ function safeUser(user) {
 
     balance:
       Number(
-        user.balance || 0
+        user.balance ||
+        0
       ),
 
     currency:
-      user.currency || 'NGN',
+      normalizeCurrency(
+        user.currency
+      ),
 
     status:
-      user.status || 'active',
+      user.status ||
+      'active',
 
     verificationStatus:
       user.verificationStatus ||
       'pending',
 
     verifiedAt:
-      user.verifiedAt || null,
+      user.verifiedAt ||
+      null,
 
     createdAt:
       user.createdAt,
@@ -656,7 +869,9 @@ function safeUser(user) {
 
 function adminUserView(user) {
   return {
-    ...safeUser(user),
+    ...safeUser(
+      user
+    ),
 
     verificationNote:
       user.verificationNote ||
@@ -664,7 +879,10 @@ function adminUserView(user) {
   };
 }
 
-function secureEqual(a, b) {
+function secureEqual(
+  a,
+  b
+) {
   const aa =
     Buffer.from(
       String(a)
@@ -676,15 +894,17 @@ function secureEqual(a, b) {
     );
 
   if (
-    aa.length !== bb.length
+    aa.length !==
+    bb.length
   ) {
     return false;
   }
 
-  return crypto.timingSafeEqual(
-    aa,
-    bb
-  );
+  return crypto
+    .timingSafeEqual(
+      aa,
+      bb
+    );
 }
 
 function addAudit(
@@ -701,7 +921,8 @@ function addAudit(
     details,
 
     createdAt:
-      new Date().toISOString()
+      new Date()
+        .toISOString()
   });
 
   data.auditLogs =
@@ -734,7 +955,10 @@ function makeTransaction(
     amount:
       Number(amount),
 
-    currency,
+    currency:
+      normalizeCurrency(
+        currency
+      ),
 
     status,
 
@@ -742,12 +966,16 @@ function makeTransaction(
       reference ||
       `${type
         .toUpperCase()
-        .slice(0, 4)}-${generateId()}`,
+        .slice(
+          0,
+          4
+        )}-${generateId()}`,
 
     description,
 
     createdAt:
-      new Date().toISOString()
+      new Date()
+        .toISOString()
   };
 
   data.transactions.push(
@@ -768,7 +996,8 @@ function auth(
 ) {
   try {
     const header =
-      req.headers.authorization;
+      req.headers
+        .authorization;
 
     if (
       !header ||
@@ -786,7 +1015,9 @@ function auth(
 
     const decoded =
       jwt.verify(
-        header.substring(7),
+        header.substring(
+          7
+        ),
         process.env.JWT_SECRET
       );
 
@@ -821,7 +1052,8 @@ function auth(
         });
     }
 
-    req.user = user;
+    req.user =
+      user;
 
     next();
   } catch (_error) {
@@ -835,7 +1067,7 @@ function auth(
 }
 
 /* =========================================================
-   ADMIN AUTH MIDDLEWARE
+   ADMIN AUTH
 ========================================================= */
 
 function adminAuth(
@@ -845,7 +1077,8 @@ function adminAuth(
 ) {
   try {
     const header =
-      req.headers.authorization;
+      req.headers
+        .authorization;
 
     if (
       !header ||
@@ -863,7 +1096,9 @@ function adminAuth(
 
     const decoded =
       jwt.verify(
-        header.substring(7),
+        header.substring(
+          7
+        ),
         process.env.JWT_SECRET
       );
 
@@ -881,7 +1116,8 @@ function adminAuth(
         });
     }
 
-    req.admin = decoded;
+    req.admin =
+      decoded;
 
     next();
   } catch (_error) {
@@ -895,12 +1131,15 @@ function adminAuth(
 }
 
 /* =========================================================
-   HEALTH
+   HEALTH CHECK
 ========================================================= */
 
 app.get(
   '/api/health',
-  (_req, res) => {
+  (
+    _req,
+    res
+  ) => {
     res.json({
       ok: true,
 
@@ -912,31 +1151,38 @@ app.get(
         'development',
 
       timestamp:
-        new Date().toISOString()
+        new Date()
+          .toISOString()
     });
   }
 );
 
 /* =========================================================
-   ADMIN AUTH
+   ADMIN LOGIN
 ========================================================= */
 
 app.post(
   '/api/admin/login',
   authLimiter,
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const username =
       typeof req.body
         .username ===
       'string'
-        ? req.body.username.trim()
+        ? req.body
+            .username
+            .trim()
         : '';
 
     const password =
       typeof req.body
         .password ===
       'string'
-        ? req.body.password
+        ? req.body
+            .password
         : '';
 
     if (
@@ -954,11 +1200,13 @@ app.post(
     if (
       !secureEqual(
         username,
-        process.env.ADMIN_USERNAME
+        process.env
+          .ADMIN_USERNAME
       ) ||
       !secureEqual(
         password,
-        process.env.ADMIN_PASSWORD
+        process.env
+          .ADMIN_PASSWORD
       )
     ) {
       return res
@@ -972,11 +1220,15 @@ app.post(
     const token =
       jwt.sign(
         {
-          role: 'admin',
-          type: 'admin'
+          role:
+            'admin',
+
+          type:
+            'admin'
         },
 
-        process.env.JWT_SECRET,
+        process.env
+          .JWT_SECRET,
 
         {
           expiresIn:
@@ -998,7 +1250,10 @@ app.post(
 app.get(
   '/api/admin/dashboard',
   adminAuth,
-  (_req, res) => {
+  (
+    _req,
+    res
+  ) => {
     const data =
       readData();
 
@@ -1009,8 +1264,13 @@ app.get(
         ),
 
       loans:
-        [...data.loans].sort(
-          (a, b) =>
+        [
+          ...data.loans
+        ].sort(
+          (
+            a,
+            b
+          ) =>
             new Date(
               b.createdAt
             ) -
@@ -1020,8 +1280,13 @@ app.get(
         ),
 
       withdrawals:
-        [...data.withdrawals].sort(
-          (a, b) =>
+        [
+          ...data.withdrawals
+        ].sort(
+          (
+            a,
+            b
+          ) =>
             new Date(
               b.createdAt
             ) -
@@ -1031,8 +1296,13 @@ app.get(
         ),
 
       transactions:
-        [...data.transactions].sort(
-          (a, b) =>
+        [
+          ...data.transactions
+        ].sort(
+          (
+            a,
+            b
+          ) =>
             new Date(
               b.createdAt
             ) -
@@ -1054,7 +1324,10 @@ app.get(
 app.patch(
   '/api/admin/users/:id',
   adminAuth,
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const form =
       parseBody(
         adminUserSchema,
@@ -1085,6 +1358,23 @@ app.patch(
         });
     }
 
+    if (
+      form.currency &&
+      form.currency !==
+        user.currency &&
+      Number(
+        user.balance ||
+        0
+      ) !== 0
+    ) {
+      return res
+        .status(409)
+        .json({
+          error:
+            'Wallet currency can only be changed when the wallet balance is zero.'
+        });
+    }
+
     const before = {
       fullName:
         user.fullName,
@@ -1093,7 +1383,10 @@ app.patch(
         user.phone,
 
       status:
-        user.status
+        user.status,
+
+      currency:
+        user.currency
     };
 
     if (
@@ -1120,8 +1413,17 @@ app.patch(
         form.status;
     }
 
+    if (
+      form.currency !==
+      undefined
+    ) {
+      user.currency =
+        form.currency;
+    }
+
     user.updatedAt =
-      new Date().toISOString();
+      new Date()
+        .toISOString();
 
     addAudit(
       data,
@@ -1140,28 +1442,38 @@ app.patch(
             user.phone,
 
           status:
-            user.status
+            user.status,
+
+          currency:
+            user.currency
         }
       }
     );
 
-    writeData(data);
+    writeData(
+      data
+    );
 
     res.json({
       user:
-        safeUser(user)
+        safeUser(
+          user
+        )
     });
   }
 );
 
 /* =========================================================
-   ADMIN VERIFY / REJECT USER
+   ADMIN VERIFY USER
 ========================================================= */
 
 app.patch(
   '/api/admin/users/:id/verification',
   adminAuth,
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const form =
       parseBody(
         verificationSchema,
@@ -1200,7 +1512,8 @@ app.patch(
       form.status;
 
     user.verificationNote =
-      form.note || null;
+      form.note ||
+      null;
 
     user.verifiedAt =
       form.status ===
@@ -1231,11 +1544,15 @@ app.patch(
       }
     );
 
-    writeData(data);
+    writeData(
+      data
+    );
 
     res.json({
       user:
-        safeUser(user)
+        safeUser(
+          user
+        )
     });
   }
 );
@@ -1247,7 +1564,10 @@ app.patch(
 app.post(
   '/api/admin/users/:id/funds',
   adminAuth,
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const form =
       parseBody(
         fundAdjustmentSchema,
@@ -1278,24 +1598,27 @@ app.post(
         });
     }
 
+    const walletCurrency =
+      normalizeCurrency(
+        user.currency
+      );
+
     if (
       form.currency !==
-      (
-        user.currency ||
-        'NGN'
-      )
+      walletCurrency
     ) {
       return res
         .status(409)
         .json({
           error:
-            `Currency mismatch. This wallet is ${user.currency || 'NGN'}; fund adjustments must use the same currency.`
+            `Currency mismatch. This wallet is ${walletCurrency}.`
         });
     }
 
     const current =
       Number(
-        user.balance || 0
+        user.balance ||
+        0
       );
 
     const amount =
@@ -1306,7 +1629,8 @@ app.post(
     if (
       form.action ===
         'debit' &&
-      amount > current
+      amount >
+        current
     ) {
       return res
         .status(400)
@@ -1319,8 +1643,10 @@ app.post(
     user.balance =
       form.action ===
       'credit'
-        ? current + amount
-        : current - amount;
+        ? current +
+          amount
+        : current -
+          amount;
 
     user.updatedAt =
       new Date()
@@ -1342,7 +1668,7 @@ app.post(
           amount,
 
           currency:
-            form.currency,
+            walletCurrency,
 
           status:
             'completed',
@@ -1369,7 +1695,7 @@ app.post(
         amount,
 
         currency:
-          form.currency,
+          walletCurrency,
 
         transactionId:
           transaction.id,
@@ -1379,11 +1705,15 @@ app.post(
       }
     );
 
-    writeData(data);
+    writeData(
+      data
+    );
 
     res.json({
       user:
-        safeUser(user),
+        safeUser(
+          user
+        ),
 
       transaction
     });
@@ -1391,13 +1721,16 @@ app.post(
 );
 
 /* =========================================================
-   ADMIN LOAN CONTROL
+   ADMIN LOAN MANAGEMENT
 ========================================================= */
 
 app.patch(
   '/api/admin/loans/:id',
   adminAuth,
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const form =
       parseBody(
         loanAdminSchema,
@@ -1447,8 +1780,9 @@ app.patch(
         .toISOString();
 
     /*
-      Only disburse the loan one time.
-    */
+     * Only disburse
+     * once.
+     */
     if (
       form.status ===
         'approved' &&
@@ -1471,8 +1805,9 @@ app.patch(
       }
 
       const walletCurrency =
-        user.currency ||
-        'NGN';
+        normalizeCurrency(
+          user.currency
+        );
 
       if (
         loan.currency !==
@@ -1482,13 +1817,14 @@ app.patch(
           .status(409)
           .json({
             error:
-              `Cannot disburse ${loan.currency} into a ${walletCurrency} wallet. The application must use the wallet currency.`
+              `Cannot disburse ${loan.currency} into a ${walletCurrency} wallet.`
           });
       }
 
       user.balance =
         Number(
-          user.balance || 0
+          user.balance ||
+          0
         ) +
         Number(
           loan.loanAmount
@@ -1555,7 +1891,9 @@ app.patch(
       }
     );
 
-    writeData(data);
+    writeData(
+      data
+    );
 
     res.json({
       loan
@@ -1564,13 +1902,16 @@ app.patch(
 );
 
 /* =========================================================
-   ADMIN WITHDRAWAL CONTROL
+   ADMIN WITHDRAWAL MANAGEMENT
 ========================================================= */
 
 app.patch(
   '/api/admin/withdrawals/:id',
   adminAuth,
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const form =
       parseBody(
         withdrawalAdminSchema,
@@ -1620,8 +1961,9 @@ app.patch(
         .toISOString();
 
     /*
-      Update original withdrawal transaction.
-    */
+     * Update the transaction
+     * connected to the request.
+     */
     const transaction =
       data.transactions.find(
         item =>
@@ -1651,8 +1993,10 @@ app.patch(
         'cancelled';
 
     /*
-      Refund only once.
-    */
+     * Refund a rejected
+     * or cancelled request
+     * once.
+     */
     if (
       isRefundStatus &&
       !wasRefundStatus &&
@@ -1668,7 +2012,8 @@ app.patch(
       if (user) {
         user.balance =
           Number(
-            user.balance || 0
+            user.balance ||
+            0
           ) +
           Number(
             withdrawal.amount
@@ -1693,9 +2038,10 @@ app.patch(
               ),
 
             currency:
-              withdrawal.currency ||
-              user.currency ||
-              'NGN',
+              normalizeCurrency(
+                withdrawal.currency ||
+                user.currency
+              ),
 
             status:
               'completed',
@@ -1715,10 +2061,10 @@ app.patch(
     }
 
     /*
-      If a previously rejected/cancelled
-      withdrawal is reopened, reserve the
-      money again.
-    */
+     * If admin reopens a
+     * refunded withdrawal,
+     * reserve funds again.
+     */
     if (
       !isRefundStatus &&
       wasRefundStatus &&
@@ -1747,8 +2093,10 @@ app.patch(
 
       if (
         Number(
-          user.balance || 0
-        ) < amount
+          user.balance ||
+          0
+        ) <
+        amount
       ) {
         return res
           .status(409)
@@ -1760,7 +2108,8 @@ app.patch(
 
       user.balance =
         Number(
-          user.balance || 0
+          user.balance ||
+          0
         ) -
         amount;
 
@@ -1780,9 +2129,10 @@ app.patch(
           amount,
 
           currency:
-            withdrawal.currency ||
-            user.currency ||
-            'NGN',
+            normalizeCurrency(
+              withdrawal.currency ||
+              user.currency
+            ),
 
           status:
             'completed',
@@ -1819,7 +2169,9 @@ app.patch(
       }
     );
 
-    writeData(data);
+    writeData(
+      data
+    );
 
     res.json({
       withdrawal
@@ -1859,15 +2211,16 @@ app.post(
           .trim()
           .toLowerCase();
 
-      if (
+      const exists =
         data.users.some(
           item =>
             String(
               item.email
             ).toLowerCase() ===
             email
-        )
-      ) {
+        );
+
+      if (exists) {
         return res
           .status(409)
           .json({
@@ -1876,17 +2229,23 @@ app.post(
           });
       }
 
+      const now =
+        new Date()
+          .toISOString();
+
       const user = {
         id:
           generateId(),
 
         fullName:
-          form.fullName.trim(),
+          form.fullName
+            .trim(),
 
         email,
 
         phone:
-          form.phone.trim(),
+          form.phone
+            .trim(),
 
         password:
           await bcrypt.hash(
@@ -1898,7 +2257,7 @@ app.post(
           0,
 
         currency:
-          'NGN',
+          form.currency,
 
         status:
           'active',
@@ -1913,19 +2272,19 @@ app.post(
           null,
 
         createdAt:
-          new Date()
-            .toISOString(),
+          now,
 
         updatedAt:
-          new Date()
-            .toISOString()
+          now
       };
 
       data.users.push(
         user
       );
 
-      writeData(data);
+      writeData(
+        data
+      );
 
       const token =
         jwt.sign(
@@ -1937,7 +2296,8 @@ app.post(
               user.email
           },
 
-          process.env.JWT_SECRET,
+          process.env
+            .JWT_SECRET,
 
           {
             expiresIn:
@@ -1949,12 +2309,16 @@ app.post(
         .status(201)
         .json({
           user:
-            safeUser(user),
+            safeUser(
+              user
+            ),
 
           token
         });
     } catch (error) {
-      next(error);
+      next(
+        error
+      );
     }
   }
 );
@@ -2039,7 +2403,8 @@ app.post(
               user.email
           },
 
-          process.env.JWT_SECRET,
+          process.env
+            .JWT_SECRET,
 
           {
             expiresIn:
@@ -2049,12 +2414,16 @@ app.post(
 
       res.json({
         user:
-          safeUser(user),
+          safeUser(
+            user
+          ),
 
         token
       });
     } catch (error) {
-      next(error);
+      next(
+        error
+      );
     }
   }
 );
@@ -2080,7 +2449,7 @@ app.get(
 );
 
 /* =========================================================
-   USER WALLET
+   WALLET
 ========================================================= */
 
 app.get(
@@ -2117,7 +2486,10 @@ app.get(
             req.user.id
         )
         .sort(
-          (a, b) =>
+          (
+            a,
+            b
+          ) =>
             new Date(
               b.createdAt
             ) -
@@ -2130,12 +2502,14 @@ app.get(
       wallet: {
         balance:
           Number(
-            user.balance || 0
+            user.balance ||
+            0
           ),
 
         currency:
-          user.currency ||
-          'NGN'
+          normalizeCurrency(
+            user.currency
+          )
       },
 
       transactions:
@@ -2148,7 +2522,7 @@ app.get(
 );
 
 /* =========================================================
-   GET USER LOANS
+   USER LOANS
 ========================================================= */
 
 app.get(
@@ -2169,7 +2543,10 @@ app.get(
             req.user.id
         )
         .sort(
-          (a, b) =>
+          (
+            a,
+            b
+          ) =>
             new Date(
               b.createdAt
             ) -
@@ -2227,23 +2604,20 @@ app.post(
           });
       }
 
-      /*
-        Do not allow a loan currency
-        that is different from the
-        wallet currency.
-      */
+      const walletCurrency =
+        normalizeCurrency(
+          user.currency
+        );
+
       if (
         form.currency !==
-        (
-          user.currency ||
-          'NGN'
-        )
+        walletCurrency
       ) {
         return res
           .status(400)
           .json({
             error:
-              `Your wallet is ${user.currency || 'NGN'}. Please submit the loan request in the same currency.`
+              `Your wallet is ${walletCurrency}. Please submit the loan request in the same currency.`
           });
       }
 
@@ -2326,7 +2700,9 @@ app.post(
         loan
       );
 
-      writeData(data);
+      writeData(
+        data
+      );
 
       res
         .status(201)
@@ -2334,13 +2710,15 @@ app.post(
           loan
         });
     } catch (error) {
-      next(error);
+      next(
+        error
+      );
     }
   }
 );
 
 /* =========================================================
-   GET USER WITHDRAWALS
+   USER WITHDRAWALS
 ========================================================= */
 
 app.get(
@@ -2361,7 +2739,10 @@ app.get(
             req.user.id
         )
         .sort(
-          (a, b) =>
+          (
+            a,
+            b
+          ) =>
             new Date(
               b.createdAt
             ) -
@@ -2421,7 +2802,8 @@ app.post(
 
       const balance =
         Number(
-          user.balance || 0
+          user.balance ||
+          0
         );
 
       const amount =
@@ -2442,12 +2824,12 @@ app.post(
       }
 
       /*
-        Reserve the withdrawal money
-        immediately so the user cannot
-        withdraw the same balance twice.
-      */
+       * Reserve the money
+       * immediately.
+       */
       user.balance =
-        balance - amount;
+        balance -
+        amount;
 
       user.updatedAt =
         new Date()
@@ -2460,6 +2842,16 @@ app.post(
         new Date()
           .toISOString();
 
+      const reasonLabel =
+        form.reason ===
+        'other'
+          ? form.otherReason
+          : form.reason
+              .replaceAll(
+                '_',
+                ' '
+              );
+
       const withdrawal = {
         id:
           generateId(),
@@ -2470,11 +2862,28 @@ app.post(
         amount,
 
         currency:
-          user.currency ||
-          'NGN',
+          normalizeCurrency(
+            user.currency
+          ),
+
+        accountName:
+          form.accountName,
+
+        bankName:
+          form.bankName,
+
+        accountNumber:
+          form.accountNumber,
+
+        reason:
+          form.reason,
+
+        otherReason:
+          form.otherReason ||
+          null,
 
         destination:
-          form.destination,
+          `${form.bankName} • ${form.accountName} • ${form.accountNumber}`,
 
         reference,
 
@@ -2510,8 +2919,9 @@ app.post(
           amount,
 
           currency:
-            user.currency ||
-            'NGN',
+            normalizeCurrency(
+              user.currency
+            ),
 
           status:
             'pending',
@@ -2519,11 +2929,13 @@ app.post(
           reference,
 
           description:
-            'Withdrawal request submitted'
+            `Withdrawal request • ${reasonLabel}`
         }
       );
 
-      writeData(data);
+      writeData(
+        data
+      );
 
       res
         .status(201)
@@ -2531,10 +2943,14 @@ app.post(
           reference,
 
           status:
-            'pending'
+            'pending',
+
+          withdrawal
         });
     } catch (error) {
-      next(error);
+      next(
+        error
+      );
     }
   }
 );
@@ -2643,19 +3059,23 @@ app.use(
     next
   ) => {
     console.error(
-      '❌ Server error:',
+      'Server error:',
       err
     );
 
     if (
       res.headersSent
     ) {
-      return next(err);
+      return next(
+        err
+      );
     }
 
     if (
-      err instanceof SyntaxError &&
-      err.status === 400 &&
+      err instanceof
+        SyntaxError &&
+      err.status ===
+        400 &&
       'body' in err
     ) {
       return res
@@ -2707,19 +3127,8 @@ app.listen(
   PORT,
   '0.0.0.0',
   () => {
-    console.log('');
     console.log(
-      '✅ Oceanic Lending API started'
+      `Oceanic Lending API started on port ${PORT}`
     );
-    console.log(
-      `✅ Port: ${PORT}`
-    );
-    console.log(
-      '✅ Health: /api/health'
-    );
-    console.log(
-      '✅ Admin: /admin'
-    );
-    console.log('');
   }
 );
