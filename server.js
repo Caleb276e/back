@@ -38,10 +38,21 @@ function writeData(data) {
 
 app.set('trust proxy', 1);
 app.use(helmet());
+
+// UPDATE CORS HERE - Allow your domain
 app.use(cors({
-    origin: '*',
-    credentials: true
+    origin: [
+        'https://oceaniclending.name.ng',
+        'https://www.oceaniclending.name.ng',
+        'http://localhost:3000',
+        'http://localhost:5500',
+        'https://back-production-766a.up.railway.app'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json({ limit: '100kb' }));
 
 // Serve static files from root
